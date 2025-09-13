@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ứng dụng Ghi âm</title>
+    <link rel="stylesheet" href="/index.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <script type="importmap">
+      {
+        "imports": {
+          "@google/genai": "https://esm.sh/@google/genai@^0.8.0",
+          "marked": "https://esm.sh/marked@^4.0.0",
+          "docx": "https://esm.sh/docx@8.5.0"
+        }
+      }
+    </script>
+  </head>
+  <body>
+    <div class="app-container">
+      <div class="main-content">
+        <div class="note-area">
+          <div class="note-header">
+            <div class="editor-title" contenteditable="true" placeholder="Ghi chép chưa có tiêu đề">
+              Ghi chép chưa có tiêu đề
+            </div>
+            <div class="header-actions">
+              <div class="tab-navigation-container">
+                <div class="tab-navigation">
+                  <button class="tab-button active" data-tab="note">Ghi chép đã trau chuốt</button>
+                  <button class="tab-button" data-tab="raw">Ghi chép nguyên văn</button>
+                  <div class="active-tab-indicator"></div>
+                </div>
+              </div>
+              <button class="action-button" id="historyButton" title="Lịch sử ghi chép">
+                <i class="fas fa-history"></i>
+              </button>
+              <button class="action-button" id="downloadButton" title="Tải xuống tất cả ghi chép (DOCX, cũ nhất trước tiên)">
+                <i class="fas fa-download"></i>
+              </button>
+            </div>
+          </div>
+
+          <div class="note-content-wrapper">
+            <div
+              id="polishedNote"
+              class="note-content active"
+              contenteditable="true"
+              placeholder="Ghi chép đã trau chuốt của bạn sẽ xuất hiện ở đây..."
+            >
+              <button id="copyPolishedNoteButton" class="copy-button hidden" title="Sao chép nội dung" contenteditable="false">
+                  <i class="far fa-copy"></i>
+              </button>
+            </div>
+            <div
+              id="rawTranscription"
+              class="note-content"
+              contenteditable="true"
+              placeholder="Ghi chép nguyên văn sẽ xuất hiện ở đây..."
+            ></div>
+          </div>
+        </div>
+
+        <div class="recording-interface">
+          <div id="liveRecordingTitle" class="live-recording-title" style="display: none">
+            Đang ghi âm
+          </div>
+          <canvas id="liveWaveformCanvas" style="display: none"></canvas>
+          <div id="liveRecordingTimerDisplay" class="live-recording-timer" style="display: none">
+            00:00.00
+          </div>
+
+          <div class="status-indicator">
+            <span id="recordingStatus" class="status-text">Sẵn sàng ghi âm</span>
+          </div>
+
+          <div class="recording-controls">
+            <button class="action-button" id="guideButton" title="Hướng dẫn">
+              <i class="fas fa-question-circle"></i>
+            </button>
+            <button class="action-button" id="uploadButton" title="Tải lên tệp âm thanh/video">
+              <i class="fas fa-upload"></i>
+            </button>
+            <button id="recordButton" class="record-button" title="Bắt đầu/Dừng ghi âm">
+              <div class="record-button-inner">
+                <i class="fas fa-microphone"></i>
+              </div>
+              <svg class="record-waves" viewBox="0 0 200 200">
+                <circle class="wave wave1" cx="100" cy="100" r="40" />
+                <circle class="wave wave2" cx="100" cy="100" r="70" />
+                <circle class="wave wave3" cx="100" cy="100" r="100" />
+              </svg>
+              <span class="record-text">Ghi âm</span>
+            </button>
+            <button class="action-button" id="aiChatButton" title="Trò chuyện với AI">
+                <i class="fas fa-robot"></i>
+            </button>
+            <button class="action-button" id="themeToggleButton" title="Chuyển sang giao diện tối">
+                <i class="fas fa-moon"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+      <footer class="app-footer">
+        <p>Nội dung AI tạo ra để tham khảo, phục vụ nghiên cứu, giảng dạy tại Viện ABAII</p>
+        <p><a href="https://abaii.vn/" target="_blank" rel="noopener noreferrer">Viện Công nghệ Blockchain và Trí tuệ nhân tạo ABAII</a></p>
+      </footer>
+    </div>
+
+    <div id="historyModal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Lịch sử Ghi chép</h2>
+                <button id="closeHistoryModal" class="close-button" title="Đóng">&times;</button>
+            </div>
+            <ul id="historyList" class="modal-body">
+                <!-- History items will be populated by script -->
+            </ul>
+        </div>
+    </div>
+
+    <div id="guideModal" class="modal-overlay hidden">
+      <div class="modal-content">
+          <div class="modal-header">
+              <h2>Hướng dẫn Sử dụng</h2>
+              <button id="closeGuideModal" class="close-button" title="Đóng">&times;</button>
+          </div>
+          <div class="modal-body guide-body">
+              <div class="guide-section">
+                <p>Đây là trợ lý ghi chép AI, giúp bạn tự động tốc ký các cuộc họp, bài giảng hay buổi trò chuyện. Ứng dụng chuyển đổi giọng nói thành văn bản, trau chuốt nội dung và có thể dịch thuật, đảm bảo bạn không bỏ lỡ thông tin quan trọng nào.</p>
+              </div>
+              <hr class="guide-separator">
+              <div class="guide-section">
+                <h3>Hướng dẫn sử dụng</h3>
+              </div>
+              <ul>
+                  <li class="guide-item">
+                      <i class="fas fa-microphone-alt"></i>
+                      <div class="guide-item-content">
+                          <h3>Ghi âm trực tiếp</h3>
+                          <p>Nhấn nút micro lớn để bắt đầu ghi. Nhấn lại nút dừng để kết thúc và tự động xử lý ghi chép.</p>
+                      </div>
+                  </li>
+                  <li class="guide-item">
+                      <i class="fas fa-upload"></i>
+                      <div class="guide-item-content">
+                          <h3>Tải tệp lên</h3>
+                          <p>Nhấn vào biểu tượng tải lên để phiên âm từ một tệp âm thanh hoặc video có sẵn trên máy.</p>
+                      </div>
+                  </li>
+                  <li class="guide-item">
+                      <i class="fas fa-history"></i>
+                      <div class="guide-item-content">
+                          <h3>Xem Lịch sử</h3>
+                          <p>Mở lịch sử để xem lại, tải hoặc xóa các ghi chép đã lưu.</p>
+                      </div>
+                  </li>
+                  <li class="guide-item">
+                      <i class="fas fa-robot"></i>
+                      <div class="guide-item-content">
+                          <h3>Trò chuyện với AI</h3>
+                          <p>Trò chuyện với AI để tóm tắt, phân tích hoặc hỏi đáp về nội dung các ghi chép của bạn.</p>
+                      </div>
+                  </li>
+                  <li class="guide-item">
+                      <i class="fas fa-download"></i>
+                      <div class="guide-item-content">
+                          <h3>Tải xuống</h3>
+                          <p>Lưu tất cả ghi chép (hiện tại và trong lịch sử) vào một tệp DOCX duy nhất.</p>
+                      </div>
+                  </li>
+                   <li class="guide-item">
+                      <i class="fas fa-pencil-alt"></i>
+                      <div class="guide-item-content">
+                          <h3>Chỉnh sửa</h3>
+                          <p>Nhấp trực tiếp vào tiêu đề hoặc nội dung để chỉnh sửa. Các thay đổi sẽ được tự động lưu vào lịch sử.</p>
+                      </div>
+                  </li>
+              </ul>
+              <hr class="guide-separator">
+              <div class="guide-section">
+                  <h3>Bảo mật & Lưu trữ</h3>
+                  <p>Mọi dữ liệu ghi âm và văn bản đều được xử lý và lưu trữ ngay trên trình duyệt của bạn. Dữ liệu không bị chia sẻ hay lưu trữ ở bất kỳ nơi nào khác, đảm bảo sự riêng tư tuyệt đối.</p>
+              </div>
+              <hr class="guide-separator">
+              <div class="guide-section" style="text-align: center;">
+                  <p>Người phát triển: Đỗ Như Lâm</p>
+              </div>
+          </div>
+      </div>
+    </div>
+    
+    <div id="aiChatModal" class="modal-overlay hidden">
+        <div class="modal-content chat-modal">
+            <div class="modal-header">
+                <h2>Trò chuyện với AI</h2>
+                <button id="closeAiChatModal" class="close-button" title="Đóng">&times;</button>
+            </div>
+            <div id="chatMessages" class="modal-body chat-messages-body">
+                <!-- Chat messages will be populated by script -->
+            </div>
+            <div class="chat-input-area">
+                <div id="attachmentPreviewContainer" class="attachment-preview-container"></div>
+                <div class="chat-input-bar">
+                    <button id="attachFileButton" class="chat-tool-button" title="Đính kèm tệp"><i class="fas fa-paperclip"></i></button>
+                    <button id="voiceInputButton" class="chat-tool-button" title="Nhập bằng giọng nói"><i class="fas fa-microphone"></i></button>
+                    <input type="text" id="chatInput" placeholder="Hỏi AI về ghi chép của bạn..." autocomplete="off">
+                    <button id="sendChatButton" title="Gửi"><i class="fas fa-paper-plane"></i></button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <input type="file" id="fileInput" class="hidden" accept="image/*,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+    <input type="file" id="fileUploadInput" class="hidden" accept="audio/*,video/*">
+    <div id="micStatus" class="debug-panel"></div>
+  <script type="module" src="/index.tsx"></script>
+</body>
+</html>
